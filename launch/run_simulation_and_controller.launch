@@ -1,0 +1,14 @@
+<launch>
+
+  <!-- 注意：默认 paused=false。设 true 会看到控制器 running 但轮子不动（物理步不走）。 -->
+  <arg name="paused" default="false"/>
+
+  <include file="$(find rm_description_for_task)/launch/hero.launch">
+    <arg name="load_chassis" value="true"/>
+    <arg name="roller_type" value="realistic"/>
+    <arg name="paused" value="$(arg paused)"/>
+  </include>
+
+  <include file="$(find hero_chassis_controller)/launch/load_controller.launch"/>
+
+</launch>

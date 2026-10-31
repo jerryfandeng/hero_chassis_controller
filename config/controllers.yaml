@@ -1,0 +1,29 @@
+controller:
+  hero_chassis_controller:
+    type: hero_chassis_controller/HeroChassisController
+    # 每个轮子完整写一段，不用 YAML 锚点 / 别名。
+    # 代价：改公共 p 要改四处；收益：单独调某个轮子时最直白。
+    #
+    # 注意：i_clamp 才是 control_toolbox::Pid 认的 key
+    #       （不是 i_max / i_min，写错会静默禁用积分）。
+    wheels:
+      left_front:
+        joint: left_front_wheel_joint
+        target_velocity: 5.0
+        pid: { p: 0.5, i: 0.0, d: 0.0, i_clamp: 2.0, antiwindup: true }
+      right_front:
+        joint: right_front_wheel_joint #关节名 与URDF一致
+        target_velocity: 5.0          #目标转速 rad/s
+        pid: { p: 0.5, i: 0.0, d: 0.0, i_clamp: 2.0, antiwindup: true }
+      left_back:
+        joint: left_back_wheel_joint
+        target_velocity: 5.0
+        pid: { p: 0.5, i: 0.0, d: 0.0, i_clamp: 2.0, antiwindup: true }
+      right_back:
+        joint: right_back_wheel_joint
+        target_velocity: 5.0
+        pid: { p: 0.5, i: 0.0, d: 0.0, i_clamp: 2.0, antiwindup: true }
+
+  joint_state_controller:
+    type: joint_state_controller/JointStateController
+    publish_rate: 500
