@@ -18,6 +18,7 @@ find_package(catkin REQUIRED
     hardware_interface
     pluginlib
     control_toolbox
+    geometry_msgs
     )
 
 ###################################
@@ -35,6 +36,7 @@ catkin_package(
     hardware_interface
     pluginlib
     control_toolbox
+    geometry_msgs
     )
 
 ###########
@@ -46,7 +48,7 @@ include_directories(
     ${catkin_INCLUDE_DIRS}
     )
 
-## Declare cpp library —— 插件本体，库名等于包名，
+## 插件本体，库名等于包名，
 ## 必须与 hero_chassis_controller_plugins.xml 里的 lib/libhero_chassis_controller 一致。
 add_library(${PROJECT_NAME}
     src/${PROJECT_NAME}.cpp
@@ -57,6 +59,19 @@ add_dependencies(${PROJECT_NAME}
     )
 
 target_link_libraries(${PROJECT_NAME}
+    ${catkin_LIBRARIES}
+    )
+
+## /cmd_vel 演示发布者（录视频用的工具，不属于控制器本体）
+add_executable(${PROJECT_NAME}_cmd_vel_demo
+    src/cmd_vel_demo_node.cpp
+    )
+
+add_dependencies(${PROJECT_NAME}_cmd_vel_demo
+    ${catkin_EXPORTED_TARGETS}
+    )
+
+target_link_libraries(${PROJECT_NAME}_cmd_vel_demo
     ${catkin_LIBRARIES}
     )
 

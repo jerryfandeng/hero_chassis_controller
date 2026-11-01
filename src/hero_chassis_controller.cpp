@@ -3,6 +3,7 @@
 //
 
 #include "hero_chassis_controller/hero_chassis_controller.h"
+
 #include <pluginlib/class_list_macros.hpp>
 #include <ros/ros.h>
 
@@ -11,12 +12,6 @@ namespace hero_chassis_controller {
 bool HeroChassisController::initWheel(Wheel &wheel, const std::string &wheel_name,
                                       hardware_interface::EffortJointInterface *effort_joint_interface,
                                       ros::NodeHandle &controller_nh) {
-  // 参数结构（config/controllers.yaml）：
-  //   wheels:
-  //     left_front:
-  //       joint: left_front_wheel_joint
-  //       target_velocity: 5.0
-  //       pid: { p: 0.5, i: 0.0, d: 0.0, i_clamp: 2.0, antiwindup: true }
   ros::NodeHandle nh(controller_nh, "wheels/" + wheel_name);
 
   std::string joint_name;
@@ -24,16 +19,18 @@ bool HeroChassisController::initWheel(Wheel &wheel, const std::string &wheel_nam
     ROS_ERROR("Missing param 'wheels/%s/joint', check config/controllers.yaml", wheel_name.c_str());
     return false;
   }
+
+  // getHandle 在关节不存在时抛 HardwareInterfaceException，
+  // controller_manager 会捕获并让 spawner 加载失败 —— 关节名写错立刻暴露。
   wheel.joint = effort_joint_interface->getHandle(joint_name);
 
-  // Pid::init 从 <wheels>/<name>/pid 读 p / i / d / i_clamp / antiwindup，
+  // Pid::init 从 <wheels>/<name>/pid 读 p / i / d / i_clamp / antiwindup。
   if (!wheel.pid.init(ros::NodeHandle(nh, "pid"))) {
     ROS_ERROR("Failed to load PID gains from 'wheels/%s/pid'", wheel_name.c_str());
     return false;
   }
 
-  nh.param("target_velocity", wheel.target_velocity, 0.0);
-  ROS_INFO("%-12s joint=%-24s target=%6.3f rad/s", wheel_name.c_str(), joint_name.c_str(),
+  ROS_INFO("%-12s joint=%-24s init_target=%6.3f rad/s", wheel_name.c_str(), joint_name.c_str(),
            wheel.target_velocity);
   return true;
 }
@@ -47,12 +44,52 @@ void HeroChassisController::updateWheel(Wheel &wheel, const ros::Duration &perio
   wheel.joint.setCommand(wheel.pid.computeCommand(error, period));
 }
 
+void HeroChassisController::stopAllWheels() {
+  left_front_.target_velocity = 0.0;
+  right_front_.target_velocity = 0.0;
+  left_back_.target_velocity = 0.0;
+  right_back_.target_velocity = 0.0;
+}
+
+void HeroChassisController::setWheelTargets(double vx, double vy, double wz) {
+  // K = 半轴距 + 半轮距，是轮心到旋转中心距离在轮子驱动方向上的投影（力臂）。
+  const double k = 0.5 * (wheel_base_ + wheel_track_);
+  const double r = wheel_radius_;
+
+  // 符号来源：simple_chassis_controller 的 cmd_ 表（前进、左移、顺时针）。
+  // 若实测发现前进变后退，整体取反即可。
+  left_front_.target_velocity = (vx - vy - k * wz) / r;
+  right_front_.target_velocity = (vx + vy + k * wz) / r;
+  left_back_.target_velocity = (vx + vy - k * wz) / r;
+  right_back_.target_velocity = (vx - vy + k * wz) / r;
+}
+
+void HeroChassisController::cmdVelCallback(const geometry_msgs::Twist &msg) {
+  last_cmd_vel_time_ = ros::Time::now();
+  setWheelTargets(msg.linear.x, msg.linear.y, msg.angular.z);
+}
+
 bool HeroChassisController::init(hardware_interface::EffortJointInterface *effort_joint_interface,
-                                 ros::NodeHandle &controller_nh) {
-  return initWheel(left_front_, "left_front", effort_joint_interface, controller_nh) &&
-         initWheel(right_front_, "right_front", effort_joint_interface, controller_nh) &&
-         initWheel(left_back_, "left_back", effort_joint_interface, controller_nh) &&
-         initWheel(right_back_, "right_back", effort_joint_interface, controller_nh);
+                                 ros::NodeHandle &root_nh, ros::NodeHandle &controller_nh) {
+  if (!(initWheel(left_front_, "left_front", effort_joint_interface, controller_nh) &&
+        initWheel(right_front_, "right_front", effort_joint_interface, controller_nh) &&
+        initWheel(left_back_, "left_back", effort_joint_interface, controller_nh) &&
+        initWheel(right_back_, "right_back", effort_joint_interface, controller_nh))) {
+    return false;
+  }
+
+  controller_nh.param("geometry/wheel_radius", wheel_radius_, wheel_radius_);
+  controller_nh.param("geometry/wheel_base", wheel_base_, wheel_base_);
+  controller_nh.param("geometry/wheel_track", wheel_track_, wheel_track_);
+  controller_nh.param("cmd_vel_timeout", cmd_vel_timeout_, cmd_vel_timeout_);
+
+  // 必须用 root_nh：controller_nh 的命名空间是 /controller/hero_chassis_controller，
+  // 用它订阅会变成 /controller/hero_chassis_controller/cmd_vel，收不到 rostopic pub /cmd_vel。
+  cmd_vel_sub_ = root_nh.subscribe("cmd_vel", 1, &HeroChassisController::cmdVelCallback, this);
+
+  ROS_INFO("cmd_vel ready: r=%.5f base=%.3f track=%.3f K=%.3f timeout=%.2f", wheel_radius_, wheel_base_,
+           wheel_track_, 0.5 * (wheel_base_ + wheel_track_), cmd_vel_timeout_);
+  return true;
 }
 
 void HeroChassisController::starting(const ros::Time & /*time*/) {
@@ -60,9 +97,17 @@ void HeroChassisController::starting(const ros::Time & /*time*/) {
   resetWheel(right_front_);
   resetWheel(left_back_);
   resetWheel(right_back_);
+  last_cmd_vel_time_ = ros::Time(0);  // 视为从未收到指令
+  stopAllWheels();
 }
 
-void HeroChassisController::update(const ros::Time & /*time*/, const ros::Duration &period) {
+void HeroChassisController::update(const ros::Time &time, const ros::Duration &period) {
+  // 超时保护：超过 cmd_vel_timeout 没收到新指令就停车。
+  // 没有这条，rostopic pub 一停，轮子会按最后一次的目标一直转。
+  if (!last_cmd_vel_time_.isZero() && (time - last_cmd_vel_time_).toSec() > cmd_vel_timeout_) {
+    stopAllWheels();
+  }
+
   updateWheel(left_front_, period);
   updateWheel(right_front_, period);
   updateWheel(left_back_, period);

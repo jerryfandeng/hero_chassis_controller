@@ -1,29 +1,34 @@
 controller:
   hero_chassis_controller:
     type: hero_chassis_controller/HeroChassisController
-    # 每个轮子完整写一段，不用 YAML 锚点 / 别名。
-    # 代价：改公共 p 要改四处；收益：单独调某个轮子时最直白。
-    #
-    # 注意：i_clamp 才是 control_toolbox::Pid 认的 key
-    #       （不是 i_max / i_min，写错会静默禁用积分）。
+
+    # 逆运动学用的几何参数，取自 rm_description_for_task 的 URDF：
+    #   wheel_radius = mecanum_wheel.urdf.xacro 的 wheel_radius
+    #   wheel_base   = chassis.urdf.xacro 的 wheel_base（前后轮间距）
+    #   wheel_track  = chassis.urdf.xacro 的 wheel_track（左右轮间距）
+    geometry:
+      wheel_radius: 0.07625
+      wheel_base: 0.4
+      wheel_track: 0.4
+
+    # 超过这个时间没收到 /cmd_vel 就停车（秒）
+    cmd_vel_timeout: 0.5
+
+    # 每个轮子一段。target_velocity 仅在从未收到 /cmd_vel 时作为初值。
     wheels:
       left_front:
         joint: left_front_wheel_joint
-        target_velocity: 5.0
         pid: { p: 0.5, i: 0.0, d: 0.0, i_clamp: 2.0, antiwindup: true }
       right_front:
-        joint: right_front_wheel_joint #关节名 与URDF一致
-        target_velocity: 5.0          #目标转速 rad/s
+        joint: right_front_wheel_joint
         pid: { p: 0.5, i: 0.0, d: 0.0, i_clamp: 2.0, antiwindup: true }
       left_back:
         joint: left_back_wheel_joint
-        target_velocity: 5.0
         pid: { p: 0.5, i: 0.0, d: 0.0, i_clamp: 2.0, antiwindup: true }
       right_back:
         joint: right_back_wheel_joint
-        target_velocity: 5.0
         pid: { p: 0.5, i: 0.0, d: 0.0, i_clamp: 2.0, antiwindup: true }
 
   joint_state_controller:
     type: joint_state_controller/JointStateController
-    publish_rate: 500
+    publish_rate: 100
