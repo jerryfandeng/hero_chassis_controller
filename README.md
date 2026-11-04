@@ -16,11 +16,26 @@ RoboMaster 英雄机器人麦克纳姆轮底盘的控制器，按 `ros_control` 
 
 #### 逆运动学公式
 
-ω_LF = (vx − vy − K·ω_z) / r
-ω_RF = (vx + vy + K·ω_z) / r
-ω_LB = (vx + vy − K·ω_z) / r
-ω_RB = (vx − vy + K·ω_z) / r
+- ω_LF = (vx − vy − K·ω_z) / r
+- ω_RF = (vx + vy + K·ω_z) / r
+- ω_LB = (vx + vy − K·ω_z) / r
+- ω_RB = (vx − vy + K·ω_z) / r
 
+### 里程计
+
+新增 `OdometryPublisher` 类（`include/hero_chassis_controller/odometry_publisher.h`
++ `src/odometry_publisher.cpp`），编译进同一个 `libhero_chassis_controller.so`，
+  由 `HeroChassisController::update()` 驱动，不是独立节点。
+
+由四个轮子的**实际转速**（`joint.getVelocity()`）经正运动学算出底盘速度：
+- vx = r/4 · ( w_lf + w_rf + w_lb + w_rb)
+- vy = r/4 · (-w_lf + w_rf + w_lb - w_rb)
+- wz = r/4K · (-w_lf + w_rf - w_lb + w_rb)
+
+以 `nav_msgs/Odometry` 发布到 `/odom`，`frame_id = "odom"`、
+  `child_frame_id = "base_link"`，`pose` 填 odom 系位姿、`twist` 填 base_link 系速度
+
+用 `tf2_ros::TransformBroadcaster` 广播 `odom → base_link` 坐标变换
 
 ### 测试
 
