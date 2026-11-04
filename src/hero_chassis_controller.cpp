@@ -3,10 +3,10 @@
 //
 
 #include "hero_chassis_controller/hero_chassis_controller.h"
-
+#include <tf/transform_broadcaster.h>
+#include <nav_msgs/Odometry.h>
 #include <pluginlib/class_list_macros.hpp>
 #include <ros/ros.h>
-
 namespace hero_chassis_controller {
 
 bool HeroChassisController::initWheel(Wheel &wheel, const std::string &wheel_name,
@@ -64,6 +64,23 @@ void HeroChassisController::setWheelTargets(double vx, double vy, double wz) {
   right_back_.target_velocity = (vx - vy + k * wz) / r;
 }
 
+void HeroChassisController::computeChassisVelocity(double &vx, double &vy, double &wz) const {
+  const double k = 0.5 * (wheel_base_ + wheel_track_);
+  const double r = wheel_radius_;
+
+  // 必须是实际转速，不能是 target_velocity：PID 有稳态误差，
+  // 用目标值会让 odom 系统性高估（实测约为目标的 78%）。
+  const double w_lf = left_front_.joint.getVelocity();
+  const double w_rf = right_front_.joint.getVelocity();
+  const double w_lb = left_back_.joint.getVelocity();
+  const double w_rb = right_back_.joint.getVelocity();
+
+  // J 的左伪逆 (JᵀJ)⁻¹Jᵀ，与 setWheelTargets 的三列逐项对应。
+  vx = r * (w_lf + w_rf + w_lb + w_rb) / 4.0;
+  vy = r * (-w_lf + w_rf + w_lb - w_rb) / 4.0;
+  wz = r * (-w_lf + w_rf - w_lb + w_rb) / (4.0 * k);
+}
+
 void HeroChassisController::cmdVelCallback(const geometry_msgs::Twist &msg) {
   last_cmd_vel_time_ = ros::Time::now();
   setWheelTargets(msg.linear.x, msg.linear.y, msg.angular.z);
@@ -76,6 +93,7 @@ bool HeroChassisController::init(hardware_interface::EffortJointInterface *effor
         initWheel(left_back_, "left_back", effort_joint_interface, controller_nh) &&
         initWheel(right_back_, "right_back", effort_joint_interface, controller_nh))) {
     return false;
+
   }
 
   controller_nh.param("geometry/wheel_radius", wheel_radius_, wheel_radius_);
@@ -86,6 +104,10 @@ bool HeroChassisController::init(hardware_interface::EffortJointInterface *effor
   // 必须用 root_nh：controller_nh 的命名空间是 /controller/hero_chassis_controller，
   // 用它订阅会变成 /controller/hero_chassis_controller/cmd_vel，收不到 rostopic pub /cmd_vel。
   cmd_vel_sub_ = root_nh.subscribe("cmd_vel", 1, &HeroChassisController::cmdVelCallback, this);
+
+  if (!odometry_.init(root_nh, controller_nh)) {
+    return false;
+  }
 
   ROS_INFO("cmd_vel ready: r=%.5f base=%.3f track=%.3f K=%.3f timeout=%.2f", wheel_radius_, wheel_base_,
            wheel_track_, 0.5 * (wheel_base_ + wheel_track_), cmd_vel_timeout_);
@@ -99,6 +121,7 @@ void HeroChassisController::starting(const ros::Time & /*time*/) {
   resetWheel(right_back_);
   last_cmd_vel_time_ = ros::Time(0);  // 视为从未收到指令
   stopAllWheels();
+  odometry_.reset();  // 位姿回原点，否则 restart 后接着上次漂
 }
 
 void HeroChassisController::update(const ros::Time &time, const ros::Duration &period) {
@@ -112,6 +135,13 @@ void HeroChassisController::update(const ros::Time &time, const ros::Duration &p
   updateWheel(right_front_, period);
   updateWheel(left_back_, period);
   updateWheel(right_back_, period);
+
+  // 正运动学 + 里程计：用实际轮速积分位姿并发布 /odom 与 odom->base_link。
+  double vx = 0.0;
+  double vy = 0.0;
+  double wz = 0.0;
+  computeChassisVelocity(vx, vy, wz);
+  odometry_.update(vx, vy, wz, time, period);
 }
 
 }  // namespace hero_chassis_controller

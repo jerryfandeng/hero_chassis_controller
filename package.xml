@@ -18,6 +18,8 @@
   <depend>pluginlib</depend>
   <depend>control_toolbox</depend>
   <depend>geometry_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>tf</depend>
 
   <!-- launch 与运行期需要 -->
   <exec_depend>controller_manager</exec_depend>

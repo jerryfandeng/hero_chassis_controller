@@ -18,17 +18,17 @@ controller:
     wheels:
       left_front:
         joint: left_front_wheel_joint
-        pid: { p: 0.5, i: 0.0, d: 0.0, i_clamp: 2.0, antiwindup: true }
+        pid: { p: 0.5, i: 0.1, d: 0.0, i_clamp: 2.0, antiwindup: true }
       right_front:
         joint: right_front_wheel_joint
-        pid: { p: 0.5, i: 0.0, d: 0.0, i_clamp: 2.0, antiwindup: true }
+        pid: { p: 0.5, i: 0.1, d: 0.0, i_clamp: 2.0, antiwindup: true }
       left_back:
         joint: left_back_wheel_joint
-        pid: { p: 0.5, i: 0.0, d: 0.0, i_clamp: 2.0, antiwindup: true }
+        pid: { p: 0.5, i: 0.1, d: 0.0, i_clamp: 2.0, antiwindup: true }
       right_back:
         joint: right_back_wheel_joint
-        pid: { p: 0.5, i: 0.0, d: 0.0, i_clamp: 2.0, antiwindup: true }
+        pid: { p: 0.5, i: 0.1, d: 0.0, i_clamp: 2.0, antiwindup: true }
 
   joint_state_controller:
     type: joint_state_controller/JointStateController
-    publish_rate: 100
+    publish_rate: 300

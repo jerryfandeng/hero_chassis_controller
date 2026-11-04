@@ -13,6 +13,8 @@
 #include <hardware_interface/joint_command_interface.h>
 #include <ros/ros.h>
 
+#include "hero_chassis_controller/odometry_publisher.h"
+
 namespace hero_chassis_controller {
 
 /*!
@@ -53,6 +55,8 @@ class HeroChassisController : public controller_interface::Controller<hardware_i
   //! 逆运动学：底盘速度 -> 四个轮子的目标转速。
   void setWheelTargets(double vx, double vy, double wz);
   void stopAllWheels();
+  //! 正运动学：由四个轮子的实际转速反解底盘速度（与 setWheelTargets 互逆）。
+  void computeChassisVelocity(double &vx, double &vy, double &wz) const;
 
   Wheel left_front_;
   Wheel right_front_;
@@ -67,6 +71,8 @@ class HeroChassisController : public controller_interface::Controller<hardware_i
   double wheel_base_{0.4};    // 前后轮间距
   double wheel_track_{0.4};   // 左右轮间距
   double cmd_vel_timeout_{0.5};
+
+  OdometryPublisher odometry_;
 };
 
 }  // namespace hero_chassis_controller

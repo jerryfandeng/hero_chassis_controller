@@ -19,6 +19,8 @@ find_package(catkin REQUIRED
     pluginlib
     control_toolbox
     geometry_msgs
+    nav_msgs
+    tf
     )
 
 ###################################
@@ -37,6 +39,8 @@ catkin_package(
     pluginlib
     control_toolbox
     geometry_msgs
+    nav_msgs
+    tf
     )
 
 ###########
@@ -52,6 +56,7 @@ include_directories(
 ## 必须与 hero_chassis_controller_plugins.xml 里的 lib/libhero_chassis_controller 一致。
 add_library(${PROJECT_NAME}
     src/${PROJECT_NAME}.cpp
+    src/odometry_publisher.cpp
     )
 
 add_dependencies(${PROJECT_NAME}
