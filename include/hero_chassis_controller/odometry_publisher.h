@@ -24,6 +24,9 @@ class OdometryPublisher {
   //! 每周期调用：先积分，再按 publish_rate_ 降频发布。
   void update(double vx, double vy, double wz, const ros::Time &time, const ros::Duration &period);
 
+  //! 当前朝向角（yaw），供全局坐标系速度模式做世界->底盘旋转。
+  double getYaw() const { return yaw_; }
+
  private:
   ros::Publisher odom_pub_;
   tf::TransformBroadcaster odom_broadcaster_;

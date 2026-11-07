@@ -41,6 +41,9 @@ catkin_package(
     geometry_msgs
     nav_msgs
     tf
+    tf2_ros
+    tf2
+    tf2_geometry_msgs
     )
 
 ###########

@@ -5,13 +5,13 @@
 #ifndef HERO_CHASSIS_CONTROLLER_HERO_CHASSIS_CONTROLLER_H
 #define HERO_CHASSIS_CONTROLLER_HERO_CHASSIS_CONTROLLER_H
 
-#include <string>
-
 #include <control_toolbox/pid.h>
 #include <controller_interface/controller.h>
 #include <geometry_msgs/Twist.h>
 #include <hardware_interface/joint_command_interface.h>
 #include <ros/ros.h>
+
+#include <string>
 
 #include "hero_chassis_controller/odometry_publisher.h"
 
@@ -23,18 +23,19 @@ namespace hero_chassis_controller {
  * 每个轮子一个独立的 control_toolbox::Pid（各自持有积分与微分状态，不能共用）。
  * 目标转速来自 /cmd_vel 经逆运动学换算；超时未收到指令时四轮目标归零。
  */
-class HeroChassisController : public controller_interface::Controller<hardware_interface::EffortJointInterface> {
+class HeroChassisController
+    : public controller_interface::Controller<hardware_interface::EffortJointInterface> {
  public:
   HeroChassisController() = default;
   ~HeroChassisController() override = default;
 
   // 三参数版本：需要 root_nh 才能订阅全局 /cmd_vel。
-  bool init(hardware_interface::EffortJointInterface *effort_joint_interface, ros::NodeHandle &root_nh,
-            ros::NodeHandle &controller_nh) override;
+  bool init(hardware_interface::EffortJointInterface* effort_joint_interface,
+            ros::NodeHandle& root_nh, ros::NodeHandle& controller_nh) override;
 
-  void starting(const ros::Time &time) override;
+  void starting(const ros::Time& time) override;
 
-  void update(const ros::Time &time, const ros::Duration &period) override;
+  void update(const ros::Time& time, const ros::Duration& period) override;
 
  private:
   //! 一个轮子的全部状态：句柄、PID、目标转速。
@@ -44,19 +45,19 @@ class HeroChassisController : public controller_interface::Controller<hardware_i
     double target_velocity{0.0};
   };
 
-  bool initWheel(Wheel &wheel, const std::string &wheel_name,
-                 hardware_interface::EffortJointInterface *effort_joint_interface,
-                 ros::NodeHandle &controller_nh);
-  void updateWheel(Wheel &wheel, const ros::Duration &period);
-  void resetWheel(Wheel &wheel);
+  bool initWheel(Wheel& wheel, const std::string& wheel_name,
+                 hardware_interface::EffortJointInterface* effort_joint_interface,
+                 ros::NodeHandle& controller_nh);
+  void updateWheel(Wheel& wheel, const ros::Duration& period);
+  void resetWheel(Wheel& wheel);
 
-  //!cmd_vel 回调：只做逆运动学，不碰 PID。
-  void cmdVelCallback(const geometry_msgs::Twist &msg);
+  //! cmd_vel 回调：只做逆运动学，不碰 PID。
+  void cmdVelCallback(const geometry_msgs::Twist& msg);
   //! 逆运动学：底盘速度 -> 四个轮子的目标转速。
   void setWheelTargets(double vx, double vy, double wz);
   void stopAllWheels();
   //! 正运动学：由四个轮子的实际转速反解底盘速度（与 setWheelTargets 互逆）。
-  void computeChassisVelocity(double &vx, double &vy, double &wz) const;
+  void computeChassisVelocity(double& vx, double& vy, double& wz) const;
 
   Wheel left_front_;
   Wheel right_front_;
@@ -68,11 +69,21 @@ class HeroChassisController : public controller_interface::Controller<hardware_i
 
   // 几何与超时参数，来自 config/controllers.yaml，默认值取自 URDF。
   double wheel_radius_{0.07625};
-  double wheel_base_{0.4};    // 前后轮间距
-  double wheel_track_{0.4};   // 左右轮间距
+  double wheel_base_{0.4};   // 前后轮间距
+  double wheel_track_{0.4};  // 左右轮间距
   double cmd_vel_timeout_{0.5};
+  double cmd_vx_{0}, cmd_vy_{0}, cmd_wz_{0};
 
+  // true 参考系在全局 odom（发布x线速度为0.2时 沿着x轴运动）
+  // false 参考系为底盘base_link(发布x线速度为0.2时 若车头不在x轴上 那么就不会在x轴上运动)
+  bool cmd_vel_in_world_{false};
   OdometryPublisher odometry_;
+
+  // 朝向纠偏：全局模式下锁定车头朝向，PID 输出 wz 修正抑制漂移（参考 rm_chassis_controllers
+  // pid_follow）。
+  control_toolbox::Pid pid_yaw_;
+  double yaw_target_{0.0};
+  bool yaw_locked_{false};
 };
 
 }  // namespace hero_chassis_controller

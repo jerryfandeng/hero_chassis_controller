@@ -10,6 +10,12 @@ RoboMaster 英雄机器人麦克纳姆轮底盘的控制器，按 `ros_control` 
 输出力矩写入 `EffortJointInterface`。四个轮子的句柄、PID 与目标速度封装在
 `struct Wheel` 中，共四个实例，互不共享状态。
 
+`/cmd_vel` 的速度指令参考系可通过 `config/controllers.yaml` 的
+`cmd_vel_in_world` 切换：
+
+- `false`（默认）：底盘坐标系模式，指令直接经逆运动学执行。
+- `true`：全局坐标系（odom 系）模式。
+
 ### 速度控制
 
 `update()` 每个周期读 `/cmd_vel`（`geometry_msgs/Twist`）最近一次的目标速度， 经麦克纳姆轮逆运动学换算成四个轮子的目标角速度，再由各自的 `control_toolbox::Pid`追到实测转速并输出力矩。
